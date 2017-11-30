@@ -1,0 +1,334 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset='utf-8' />
+<link rel="stylesheet" type="text/css" href="//cloud.typography.com/7436432/714802/css/fonts.css" />
+<link href='fullcalendar.min.css' rel='stylesheet' />
+<link href='fullcalendar.print.min.css' rel='stylesheet' media='print' />
+<link href='fullcalendar.customization.css' rel='stylesheet' />
+
+<script src='lib/moment.min.js'></script>
+<script src='lib/jquery.min.js'></script>
+<script src='lib/linkify.min.js'></script>
+<script src='lib/linkify-jquery.min.js'></script>
+<script src='lib/linkify-string.min.js'></script>
+<script src='fullcalendar.js'></script>
+<script>
+	$(document).ready(function() {
+		var selectedDay;
+
+		//Function to post data to events file:
+		function pushDB(page, ajaxData) {
+			alert(ajaxData);
+			$.ajax({
+					url: page,
+					data: ajaxData,                                                    
+					type: "POST",
+					success: function(json) {
+						$('#calendar').fullCalendar('refetchEvents');
+						$('#agenda').fullCalendar('refetchEvents');
+					},
+					error: function (XMLHttpRequest, textStatus, errorThrown) {
+      		   			alert(errorThrown);
+     				}
+				});
+		}
+
+		//left-side calendar view:
+		$('#calendar').fullCalendar({
+			header: {
+				left: 'prev,next today',
+				center: 'title',
+				right: ''
+			},
+
+			displayEventTime: false, // don't show the time column in list view
+		
+			events: {
+				url: 'php/get-events.php',
+				error: function() {
+					$('#script-warning').show();
+				}
+			},
+
+			selectable: true,
+   			selectHelper: true,
+		    
+		    select: function(start, end, jsEvent) {
+
+		    	if(start.format() != end.subtract(1, 'days').format()){	//if this is a date range selection
+		            modalbox($('#newEventModal'), start.format(), end.format());
+		    	}
+		    },
+		    editable: true,
+			
+			dayClick: function(date, jsEvent, view) {
+				// if click is in the white space of the day cell space, create a new event
+				// else jump to day and shows day's events in agenda view
+				if($(jsEvent.target).hasClass('fc-highlight') || $(jsEvent.target).hasClass('')){	//these appear to be the only possible matches for the white area of the day cell
+						jsEvent.stopPropagation();
+						modalbox($('#newEventModal'), date.format(), date.format());
+					}
+					else {
+						$('#agenda').fullCalendar( 'gotoDate', date );
+					}
+				
+				return false;
+			},
+
+			dayRender: function(date, cell){
+		      $('<div class="plusEvent">+</div>').appendTo(cell);
+		    },
+
+			eventClick: function(calEvent, jsEvent, view) {
+				// jumps to day of event in agenda window
+				$('#agenda').fullCalendar( 'gotoDate', calEvent.start );
+				return false;
+			},
+
+			//edit events by moving or resizing
+			eventDrop: function( calEvent, delta, revertFunc, jsEvent, ui, view ) { 
+				var ajaxData = 'title=' + calEvent.title + '&start=' + moment(calEvent.start).format('YYYY-MM-DD') +'&end='+ moment(calEvent.end).subtract(1, 'days').format('YYYY-MM-DD') + '&location=' + calEvent.location + '&description=' + calEvent.description + '&contact=' + calEvent.contact + '&color=' + calEvent.color + '&repeat=' + calEvent.repeat  + '&repetitions=' + calEvent.repetitions + '&originalTitle=' + calEvent.title;
+				pushDB('php/editEventJSON.php', ajaxData);
+			},
+
+			eventResize: function( calEvent, delta, revertFunc, jsEvent, ui, view ) { 
+				var ajaxData = 'title=' + calEvent.title + '&start=' + moment(calEvent.start).format('YYYY-MM-DD') +'&end='+ moment(calEvent.end).subtract(1, 'days').format('YYYY-MM-DD') + '&location=' + calEvent.location + '&description=' + calEvent.description + '&contact=' + calEvent.contact + '&color=' + calEvent.color + '&repeat=' + calEvent.repeat  + '&repetitions=' + calEvent.repetitions +'&originalTitle=' + calEvent.title;
+				pushDB('php/editEventJSON.php', ajaxData);
+			},
+			
+			loading: function(bool) {
+				$('#loading').toggle(bool);
+			}
+		});
+
+		//right-side agenda view
+		$('#agenda').fullCalendar({
+			header: false,
+			defaultView: 'listDay',
+			listDayFormat: 'dddd, MMMM Do',
+			displayEventTime: false, // don't show the time column in list view
+			events: 'php/get-events.php',
+			// clicking an event opens event detail. 
+
+			eventClick: function(calEvent, jsEvent, view) {
+				//switch (calEvent.color) {
+				//			case 'never':
+				var liData='<td class="list-item-detail" style="display:none"><strong>URL</strong><p class="whitespace"><a href="' + calEvent.location + '">' + calEvent.location + '</a></td><td class="list-item-detail" style="display:none"><strong>Description</strong><p class="whitespace">' + calEvent.description + '</p></td><td class="list-item-detail" style="display:none"><strong>Contact </strong><p class="whitespace">' + calEvent.contact + '</p></td><td class="list-item-detail" style="display:none"><strong>Assignee </strong><p class="whitespace">' + calEvent.contact + '</td><td class="list-item-detail" style="display:none"><a href="#" class="edit">Edit</a></td>';
+				
+				//Because the backend handles click events, workaround logic is needed for the edit button
+				if($('td', this).hasClass('list-item-detail')) {
+					//edit button click: get event info and populate modal form
+					if($(jsEvent.target).hasClass('edit')){
+						jsEvent.stopPropagation();
+						
+
+						$('#originalTitle').val(calEvent.title);
+						$('#titleEdit').val(calEvent.title);
+						$('#whereEdit').val(calEvent.location);
+						$('#contentEdit').val(calEvent.description);
+						$('#contactEdit').val(calEvent.contact);
+						$('#colorEdit').val(calEvent.color);
+						$('#startEdit').val(calEvent.start.format('YYYY-MM-DD'));
+						$('#endEdit').val(calEvent.end.subtract(1, 'days').format('YYYY-MM-DD'));
+						switch (calEvent.repeat) {
+							case 'never':
+								$('#neverEdit').prop('checked', true);
+							case 'week':
+								$('#weekEdit').prop('checked', true);
+							case 'month':
+								$('#monthEdit').prop('checked', true);
+							case 'monthWeek':
+								$('#monthWeekEdit').prop('checked', true);
+							case 'year':
+								$('#yearEdit').prop('checked', true);
+						}
+						$('#repetitionsEdit').val(calEvent.repetitions);
+						
+						modalbox($('#editModal'), $('#startEdit').val(), $('#endEdit').val());
+					}
+					else if ($(jsEvent.target)[0].nodeName.toLowerCase()!=='a') {
+						jsEvent.stopPropagation();
+						$('.list-item-detail', this).toggle(100, function() { $(this).remove() });
+					}
+					
+				}
+				else {
+					$(liData).appendTo(this).toggle(100);
+					$('.list-item-detail', this).css('display', 'block');
+				} 
+				return false;
+			},
+			loading: function(bool) {
+				$('#loading').toggle(bool);
+			}
+		});
+
+
+		function modalbox(modal,start,end) {
+			$('#start').val(start);
+			$('#end').val(end);			
+			modal.css('display', 'block');
+
+			var modalContent = modal.find(">:first-child");
+			var adjustedHeight = 0.5* document.documentElement.clientHeight;
+			var adjustedWidth = 0.5* document.documentElement.clientWidth;
+			modalContent.css('height', adjustedHeight + 'px');
+			modalContent.css('width', adjustedWidth + 'px');
+			modalContent.css('maxHeight', (9/16) * adjustedWidth + 'px');  
+			modalContent.css('maxWidth', (16/9) * adjustedHeight + 'px');
+			$(".close").click(function() {
+		    	modal.css('display', 'none');
+			});
+			// When the user clicks on <span> (x), close the modal
+				
+		    // When the user clicks outside of the modal content, close the modal
+		    window.onclick = function(event) {
+		    	if (event.target == modal) {
+		      		modal.css('display', 'none');
+				}
+			}
+		}
+			/*********** Submit the form data ****************/ 
+		$('#newSubmit').click(function(event) {
+				event.preventDefault();
+				var ajaxData = $('#newEventForm').serialize();
+
+				// Now we push it to db also :
+				pushDB('php/editEventJSON.php', ajaxData);
+				// Whether we had the form fulfilled or not, we clean FullCalendar and close the popup   
+				$('#calendar').fullCalendar('unselect');
+				
+				$('#newEventModal').css('display', 'none');
+				$("#newEventForm")[0].reset();
+			});
+		$('#editSubmit').click(function(event) {
+				event.preventDefault();
+				var ajaxData = $('#editForm').serialize();
+				// Now we push it to db :
+				pushDB('php/editEventJSON.php', ajaxData);
+				
+				$('#editModal').css('display', 'none');
+				$("#editForm")[0].reset();
+			});
+		$('#deleteSubmit').click(function(event) {
+				event.preventDefault();	
+				var ajaxData = 'originalTitle=' + $('#originalTitle').val();
+				// Now we push it to db :
+				pushDB('php/deleteEventJSON.php', ajaxData);
+				
+				$('#editModal').css('display', 'none');
+		});
+		
+	});
+</script>
+</head>
+<body>
+	<div id="newEventModal" class="modal">
+		
+		<div id="newEventContent" class="eventContent">	
+			<span class="close">&times;</span>	
+			<form id="newEventForm" class="eventForm">
+				<div>
+					<label for="title">Title:</label>
+					<INPUT TYPE="TEXT" ID="title" style="background-color:#EEF4F7" NAME="title" >
+					<div>
+						<label for="location">URL:</label>
+						<INPUT TYPE="TEXT" ID="location" NAME="location">
+						<br>
+						<label for="description">Content:</label>
+						<TEXTAREA ID="description" NAME="description"></TEXTAREA><br>
+						<label for="contact">Contact/Stakeholder:</label>
+						<INPUT TYPE="TEXT" ID="contact" NAME="contact">
+						<label for="color">Assigned to</label>
+						<select ID="color"  NAME="color">
+							<option value="green">Senior Web Content Producer</option>
+							<option value="blue">Web Content Producer</option>
+							<option value="red">Executive Communications</option>
+							<option value="green">Mobile Team</option>
+							<option value="blue">Development Team</option>
+							<option value="d3d3d3">Done!</option>
+						</select>
+					</div> 
+				</div>
+				<label for="start">Start Date:</label>
+			    <INPUT TYPE="date" ID="start" NAME="start">
+			    <label for="end">End Date:</label>
+			    <INPUT type="date" ID="end" NAME="end">
+		        <div id="repeat-options" >
+					Repeat:<br>
+					<input type="radio" value="never" name="repeat" checked="checked" id="never" align="bottom">never
+					<input type="radio" value="week" name="repeat" id="week" align="bottom">weekly
+					<input type="radio" value="month" name="repeat" id="month" align="bottom">monthly (day of month)
+					<input type="radio" value="monthWeek" name="repeat" id="monthWeek" align="bottom">monthly on the nth weekday
+					<input type="radio" value="year" name="repeat" id="year" align="bottom">yearly
+					<input type="number" name="repetitions" id="repetitions" value="0" max="9999"> times. 
+				</div>
+			    <br />
+			    
+			    <INPUT type="button" value="OK" id="newSubmit">
+		    </form>
+		</div>
+	</div>
+
+	<div id='calendar'></div>
+
+	<div id='agenda'></div>
+
+	<div class="modal" id="editModal">
+		<div id="notes" class="eventContent">
+			<form id="editForm" class="eventForm">
+				<span class="close">&times;</span>
+
+					
+				<div style="margin-top:10px">
+					<label for="title">Title:</label>
+					<INPUT TYPE="TEXT" ID="titleEdit" style="background-color:#EEF4F7" NAME="title" >
+
+					<label for="whereEdit">URL:</label>
+					<INPUT TYPE="TEXT" ID="whereEdit" NAME="location">
+					<br>
+					
+					<label for="contentEdit">Content:</label>
+					<TEXTAREA ID="contentEdit"  NAME="description"></TEXTAREA><br>
+					
+					<label for="contactEdit">Contact/Stakeholder:</label>
+					<INPUT TYPE="TEXT" ID="contactEdit" NAME="contact">
+					<label for="colorEdit">Assigned to</label>
+						<select ID="colorEdit"  NAME="color">
+							<option value="green">Senior Web Content Producer</option>
+							<option value="blue">Web Content Producer</option>
+							<option value="red">Executive Communications</option>
+							<option value="green">Mobile Team</option>
+							<option value="blue">Development Team</option>
+							<option value="d3d3d3">Done!</option>
+						</select>
+				</div> 
+
+				<label for="startEdit">Start Date:</label>
+			    <INPUT TYPE="date" ID="startEdit" NAME="start">
+			    <label for="endEdit">End Date:</label>
+			    <INPUT type="date" ID="endEdit" NAME="end">
+		        <div id="repeat-options-edit" >
+					Repeat:
+					<input type="radio" value="never" name="repeat" id="neverEdit" checked="checked" align="bottom">never
+					<input type="radio" value="week" name="repeat" id="weekEdit" align="bottom">weekly
+					<input type="radio" value="month" name="repeat" id="monthEdit" align="bottom">monthly (day of month)
+					<input type="radio" value="monthWeek" name="repeat" id="monthWeekEdit" align="bottom">monthly on the nth weekday
+					<input type="radio" value="year" name="repeat" id="yearEdit" align="bottom">yearly
+					<input type="number" id="repetitionsEdit" name="repetitions" id="repetitionsEdit" value="0" max="9999"> times. 
+				</div>
+			    <INPUT TYPE="HIDDEN" ID="originalTitle" NAME="originalTitle" value="'+originalTitle+'">
+			    <br />
+			    <INPUT type="button" id="editSubmit" value="Update">
+			</form>
+			<form id="deleteForm">
+				<INPUT type="button" id="deleteSubmit" value="Delete">
+				
+			</form>
+		</div>
+	</div>
+
+</body>
+</html>

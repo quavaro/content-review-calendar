@@ -1,0 +1,152 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset='utf-8' />
+<link rel="stylesheet" type="text/css" href="//cloud.typography.com/7436432/714802/css/fonts.css" />
+<link href='fullcalendar.min.css' rel='stylesheet' />
+<link href='fullcalendar.print.min.css' rel='stylesheet' media='print' />
+<link href='fullcalendar.customization.css' rel='stylesheet' />
+
+<script src='lib/moment.min.js'></script>
+<script src='lib/jquery.min.js'></script>
+<script src='lib/linkify.min.js'></script>
+<script src='lib/linkify-jquery.min.js'></script>
+<script src='lib/linkify-string.min.js'></script>
+<script src='fullcalendar.js'></script>
+<script>
+	$(document).ready(function() {
+		var selectedDay;
+
+		//Function to post data to events file:
+		function pushDB(page, ajaxData) {
+			alert(ajaxData);
+			$.ajax({
+					url: page,
+					data: ajaxData,                                                    
+					type: "POST",
+					success: function(json) {
+						$('#calendar').fullCalendar('refetchEvents');
+						$('#agenda').fullCalendar('refetchEvents');
+					}
+				});
+		}
+
+		//left-side calendar view:
+		$('#calendar').fullCalendar({
+			header: {
+				left: 'prev,next today',
+				center: 'title',
+				right: ''
+			},
+
+			displayEventTime: false, // don't show the time column in list view
+		
+			events: {
+				url: 'php/get-events.php',
+				error: function() {
+					$('#script-warning').show();
+				}
+			},
+
+			selectable: true,
+   			selectHelper: true,
+		    
+		    editable: true,
+			
+			dayClick: function(date, jsEvent, view) {
+				
+						$('#agenda').fullCalendar( 'gotoDate', date );
+				return false;
+			},
+
+			dayRender: function(date, cell){
+		      $('<div class="plusEvent">+</div>').appendTo(cell);
+		    },
+
+			eventClick: function(calEvent, jsEvent, view) {
+				// jumps to day of event in agenda window
+				$('#agenda').fullCalendar( 'gotoDate', calEvent.start );
+				return false;
+			},
+
+
+			
+			loading: function(bool) {
+				$('#loading').toggle(bool);
+			}
+		});
+
+		//right-side agenda view
+		$('#agenda').fullCalendar({
+			header: false,
+			defaultView: 'listDay',
+			listDayFormat: 'dddd, MMMM Do',
+			displayEventTime: false, // don't show the time column in list view
+			events: 'php/get-events.php',
+			// clicking an event opens event detail. 
+
+			eventClick: function(calEvent, jsEvent, view) {
+				var liData='<td class="list-item-detail" style="display:none"><strong>URL</strong><p class="whitespace"><a href="' + calEvent.location + '">' + calEvent.location + '</a></td><td class="list-item-detail" style="display:none"><strong>Description</strong><p class="whitespace">' + calEvent.description + '</p></td><td class="list-item-detail" style="display:none"><strong>Contact </strong><p class="whitespace">' + calEvent.contact + '</p></td><td class="list-item-detail" style="display:none"><strong>Assignee </strong><p class="whitespace">' + calEvent.contact + '</td>';
+				
+				//Because the backend handles click events, workaround logic is needed for the edit button
+				if($('td', this).hasClass('list-item-detail')) {
+					//edit button click: get event info and populate modal form
+					if($(jsEvent.target).hasClass('edit')){
+						jsEvent.stopPropagation();
+						
+
+						$('#originalTitle').val(calEvent.title);
+						$('#titleEdit').val(calEvent.title);
+						$('#whereEdit').val(calEvent.location);
+						$('#contentEdit').val(calEvent.description);
+						$('#contactEdit').val(calEvent.contact);
+						$('#colorEdit').val(calEvent.color);
+						$('#startEdit').val(calEvent.start.format('YYYY-MM-DD'));
+						$('#endEdit').val(calEvent.end.subtract(1, 'days').format('YYYY-MM-DD'));
+						switch (calEvent.repeat) {
+							case 'never':
+								$('#neverEdit').prop('checked', true);
+							case 'week':
+								$('#weekEdit').prop('checked', true);
+							case 'month':
+								$('#monthEdit').prop('checked', true);
+							case 'monthWeek':
+								$('#monthWeekEdit').prop('checked', true);
+							case 'year':
+								$('#yearEdit').prop('checked', true);
+						}
+						$('#repetitionsEdit').val(calEvent.repetitions);
+						
+					}
+					else if ($(jsEvent.target)[0].nodeName.toLowerCase()!=='a') {
+						jsEvent.stopPropagation();
+						$('.list-item-detail', this).toggle(100, function() { $(this).remove() });
+					}
+					
+				}
+				else {
+					$(liData).appendTo(this).toggle(100);
+					$('.list-item-detail', this).css('display', 'block');
+				} 
+				return false;
+			},
+			loading: function(bool) {
+				$('#loading').toggle(bool);
+			}
+		});
+
+
+		
+	});
+</script>
+</head>
+<body>
+
+	<div id='calendar'></div>
+
+	<div id='agenda'></div>
+
+	
+</body>
+</html>

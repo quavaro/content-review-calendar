@@ -6,23 +6,47 @@
 //--------------------------------------------------------------------------------------------------
 
 // Require our Event class and datetime utilities
+
+
 require dirname(__FILE__) . '/utils.php';
 
 	$title 				= $_POST['title'];
 	$start 				= $_POST['start'];
 	$end 				= $_POST['end'];
-	$where_event		= $_POST['where_event'];
-	$content_event		= $_POST['content_event'];
+	$location			= $_POST['location'];
+	$description		= $_POST['description'];
 	$contact			= $_POST['contact'];
 	$color				= $_POST['color'];
 	$originalTitle		= $_POST['originalTitle'];
-	$repeat				= $_POST['repeats'];
+	$repeat				= $_POST['repeat'];
 	$repetitions		= $_POST['repetitions'];
+
+function ordinaltext($nthday) {
+	switch ($nthday) {
+		case 0:
+			$nthday = "first";
+			break;
+		case 1:
+			$nthday = "second";
+			break;
+		case 2:
+			$nthday = "third";
+			break;
+		case 3:
+			$nthday = "fourth";
+			break;
+		case 4:
+			$nthday = "last";
+			break;
+		}
+		return $nthday;
+}
 
 
 $oldJson = file_get_contents(dirname(__FILE__) . '/../json/events.json');
 $eventData = json_decode($oldJson, true);
 $match = false;
+$end= date('Y-m-d', strtotime($end . '+1 day'));
 
 foreach ($eventData as $key => $event) {
 	//if this is the first instance of the title, edit the array record
@@ -30,8 +54,8 @@ foreach ($eventData as $key => $event) {
 		$eventData[$key]['title'] = $title;
 		$eventData[$key]['start'] = $start;
 		$eventData[$key]['end'] = $end;
-		$eventData[$key]['location'] = $where_event;
-		$eventData[$key]['description'] = $content_event;
+		$eventData[$key]['location'] = $location;
+		$eventData[$key]['description'] = $description;
 		$eventData[$key]['contact'] = $contact;
 		$eventData[$key]['color'] = $color;
 		$eventData[$key]['repeat'] = $repeat;
@@ -46,17 +70,44 @@ foreach ($eventData as $key => $event) {
 }
 //if no event with the posted title was found create a new one
 if ($match == false) {
-	$eventData[] = (object) array('title' => $title, 'start' => $start, 'end' => $end, 'location' => $where_event, 'description' => $content_event, 'contact' => $contact, 'color' => $color, 'repeat' => $repeat, 'repetitions' => $repetitions, 'originalTitle' => $originalTitle);
+	$eventData[] = (object) array('title' => $title, 'start' => $start, 'end' => $end, 'location' => $location, 'description' => $description, 'contact' => $contact, 'color' => $color, 'repeat' => $repeat, 'repetitions' => $repetitions, 'originalTitle' => $originalTitle);
 }
 
 //create any requested repeat instances
 if ($repeat!='never') {
-	while ($repetitions > 0) {
-		$start = date('Y-m-d H:i', strtotime($start . '+1 ' . $repeat));
-		$end =  date('Y-m-d H:i', strtotime($end . '+1 ' . $repeat));
-		$eventData[] = (object) array('title' => $title, 'start' => $start, 'end' => $end, 'location' => $where_event, 'description' => $content_event, 'contact' => $contact, 'color' => $color, 'originalTitle' => $originalTitle);
-		$repetitions--;
+	//if this is a "second tuesday of the month" type of request
+	if ($repeat=='monthWeek') {
+		$j= $repetitions;
+		$startweekday = date('l', strtotime($start)); //get text representation of day, e.g. Monday
+
+		$startmonthday = date('j', strtotime($start)); // day of month, 1 to 31
+		$endmonthday = date('j', strtotime($end));
+
+		$eventlength = $endmonthday - $startmonthday;
+
+		$startdaycount = floor(($startmonthday - 1) / 7);
+
+		$startordinal = ordinaltext($startdaycount);
+	
+		for ($i = 1; $j > 0; $j--, $i++) {
+			
+			$start = date('Y-m-d', strtotime($startordinal . ' ' . $startweekday . ' of +' . $i . ' month'));
+			$end =  date('Y-m-d', strtotime($start . ' + ' . $eventlength . ' days'));
+			$eventData[] = (object) array('title' => $title, 'start' => $start, 'end' => $end, 'location' => $location, 'description' => $description, 'contact' => $contact, 'color' => $color, 'repeat' => $repeat, 'repetitions' => $repetitions, 'originalTitle' => $originalTitle);
+		}
+
 	}
+	else {
+		$i = $repetitions;
+		while ($i > 0) {
+			$start = date('Y-m-d', strtotime($start . '+1 ' . $repeat));
+			$end =  date('Y-m-d', strtotime($end . '+1 ' . $repeat));
+			
+			$eventData[] = (object) array('title' => $title, 'start' => $start, 'end' => $end, 'location' => $location, 'description' => $description, 'contact' => $contact, 'color' => $color, 'repeat' => $repeat, 'repetitions' => $repetitions, 'originalTitle' => $originalTitle);
+			$i--;
+		}
+	}
+	
 }
 
 $newJson = json_encode($eventData, true);
